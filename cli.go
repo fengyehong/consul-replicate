@@ -193,6 +193,17 @@ func (cli *CLI) ParseFlags(args []string) (*Config, []string, bool, bool, error)
 		return nil
 	}), "config", "")
 
+	// TODO: Add all consul flags for destination-consul
+	flags.Var((funcVar)(func(s string) error {
+		c.DestinationConsul.Address = config.String(s)
+		return nil
+	}), "destination-consul-addr", "")
+
+	flags.Var((funcVar)(func(s string) error {
+		c.Consul.Token = config.String(s)
+		return nil
+	}), "destination-consul-token", "")
+
 	flags.Var((funcVar)(func(s string) error {
 		c.Consul.Address = config.String(s)
 		return nil

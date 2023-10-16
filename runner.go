@@ -55,6 +55,8 @@ type Runner struct {
 	// client is the consul/api client.
 	clients *dep.ClientSet
 
+	destinationClients *dep.ClientSet
+
 	// data is the internal storage engine for this runner with the key being the
 	// String() for the dependency and the result being the view that holds the
 	// data.
@@ -238,11 +240,17 @@ func (r *Runner) init() error {
 		result)
 
 	// Create the client
-	clients, err := newClientSet(r.config)
+	clients, err := newClientSet(r.config.Consul)
 	if err != nil {
 		return fmt.Errorf("runner: %s", err)
 	}
 	r.clients = clients
+
+	destinationClients, err := newClientSet(r.config.DestinationConsul)
+	if err != nil {
+		return fmt.Errorf("runner: %s", err)
+	}
+	r.destinationClients = destinationClients
 
 	// Create the watcher
 	watcher, err := newWatcher(r.config, clients, r.once)
@@ -275,7 +283,7 @@ func (r *Runner) get(prefix *PrefixConfig) (*watch.View, bool) {
 // expensive and needs to be parallelized.
 func (r *Runner) replicate(prefix *PrefixConfig, excludes *ExcludeConfigs, doneCh chan struct{}, errCh chan error) {
 	// Ensure we are not self-replicating
-	info, err := r.clients.Consul().Agent().Self()
+	info, err := r.destinationClients.Consul().Agent().Self()
 	if err != nil {
 		errCh <- fmt.Errorf("failed to query agent: %s", err)
 		return
@@ -309,7 +317,7 @@ func (r *Runner) replicate(prefix *PrefixConfig, excludes *ExcludeConfigs, doneC
 		return
 	}
 
-	kv := r.clients.Consul().KV()
+	kv := r.destinationClients.Consul().KV()
 
 	// Update keys to the most recent versions
 	updates := 0
@@ -423,7 +431,7 @@ func (r *Runner) replicate(prefix *PrefixConfig, excludes *ExcludeConfigs, doneC
 
 // getStatus is used to read the last replication status.
 func (r *Runner) getStatus(prefix *PrefixConfig) (*Status, error) {
-	kv := r.clients.Consul().KV()
+	kv := r.destinationClients.Consul().KV()
 	pair, _, err := kv.Get(r.statusPath(prefix), nil)
 	if err != nil {
 		return nil, err
@@ -447,7 +455,7 @@ func (r *Runner) setStatus(prefix *PrefixConfig, status *Status) error {
 	}
 
 	// Put the key to Consul.
-	kv := r.clients.Consul().KV()
+	kv := r.destinationClients.Consul().KV()
 	_, err = kv.Put(&api.KVPair{
 		Key:   r.statusPath(prefix),
 		Value: enc,
@@ -510,29 +518,29 @@ func (r *Runner) deletePid() error {
 }
 
 // newClientSet creates a new client set from the given config.
-func newClientSet(c *Config) (*dep.ClientSet, error) {
+func newClientSet(c *config.ConsulConfig) (*dep.ClientSet, error) {
 	clients := dep.NewClientSet()
 
 	if err := clients.CreateConsulClient(&dep.CreateConsulClientInput{
-		Address:                      config.StringVal(c.Consul.Address),
-		Token:                        config.StringVal(c.Consul.Token),
-		AuthEnabled:                  config.BoolVal(c.Consul.Auth.Enabled),
-		AuthUsername:                 config.StringVal(c.Consul.Auth.Username),
-		AuthPassword:                 config.StringVal(c.Consul.Auth.Password),
-		SSLEnabled:                   config.BoolVal(c.Consul.SSL.Enabled),
-		SSLVerify:                    config.BoolVal(c.Consul.SSL.Verify),
-		SSLCert:                      config.StringVal(c.Consul.SSL.Cert),
-		SSLKey:                       config.StringVal(c.Consul.SSL.Key),
-		SSLCACert:                    config.StringVal(c.Consul.SSL.CaCert),
-		SSLCAPath:                    config.StringVal(c.Consul.SSL.CaPath),
-		ServerName:                   config.StringVal(c.Consul.SSL.ServerName),
-		TransportDialKeepAlive:       config.TimeDurationVal(c.Consul.Transport.DialKeepAlive),
-		TransportDialTimeout:         config.TimeDurationVal(c.Consul.Transport.DialTimeout),
-		TransportDisableKeepAlives:   config.BoolVal(c.Consul.Transport.DisableKeepAlives),
-		TransportIdleConnTimeout:     config.TimeDurationVal(c.Consul.Transport.IdleConnTimeout),
-		TransportMaxIdleConns:        config.IntVal(c.Consul.Transport.MaxIdleConns),
-		TransportMaxIdleConnsPerHost: config.IntVal(c.Consul.Transport.MaxIdleConnsPerHost),
-		TransportTLSHandshakeTimeout: config.TimeDurationVal(c.Consul.Transport.TLSHandshakeTimeout),
+		Address:                      config.StringVal(c.Address),
+		Token:                        config.StringVal(c.Token),
+		AuthEnabled:                  config.BoolVal(c.Auth.Enabled),
+		AuthUsername:                 config.StringVal(c.Auth.Username),
+		AuthPassword:                 config.StringVal(c.Auth.Password),
+		SSLEnabled:                   config.BoolVal(c.SSL.Enabled),
+		SSLVerify:                    config.BoolVal(c.SSL.Verify),
+		SSLCert:                      config.StringVal(c.SSL.Cert),
+		SSLKey:                       config.StringVal(c.SSL.Key),
+		SSLCACert:                    config.StringVal(c.SSL.CaCert),
+		SSLCAPath:                    config.StringVal(c.SSL.CaPath),
+		ServerName:                   config.StringVal(c.SSL.ServerName),
+		TransportDialKeepAlive:       config.TimeDurationVal(c.Transport.DialKeepAlive),
+		TransportDialTimeout:         config.TimeDurationVal(c.Transport.DialTimeout),
+		TransportDisableKeepAlives:   config.BoolVal(c.Transport.DisableKeepAlives),
+		TransportIdleConnTimeout:     config.TimeDurationVal(c.Transport.IdleConnTimeout),
+		TransportMaxIdleConns:        config.IntVal(c.Transport.MaxIdleConns),
+		TransportMaxIdleConnsPerHost: config.IntVal(c.Transport.MaxIdleConnsPerHost),
+		TransportTLSHandshakeTimeout: config.TimeDurationVal(c.Transport.TLSHandshakeTimeout),
 	}); err != nil {
 		return nil, fmt.Errorf("runner: %s", err)
 	}

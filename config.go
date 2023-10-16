@@ -43,6 +43,8 @@ type Config struct {
 	// Consul is the configuration for connecting to a Consul cluster.
 	Consul *config.ConsulConfig `mapstructure:"consul"`
 
+	DestinationConsul *config.ConsulConfig `mapstructure:"consul"`
+
 	// Excludes is the list of key prefixes to exclude from replication.
 	Excludes *ExcludeConfigs `mapstructure:"exclude"`
 
@@ -215,12 +217,13 @@ func (c *Config) GoString() string {
 // variables may be set which control the values for the default configuration.
 func DefaultConfig() *Config {
 	return &Config{
-		Consul:    config.DefaultConsulConfig(),
-		Excludes:  DefaultExcludeConfigs(),
-		Prefixes:  DefaultPrefixConfigs(),
-		StatusDir: config.String(DefaultStatusDir),
-		Syslog:    config.DefaultSyslogConfig(),
-		Wait:      config.DefaultWaitConfig(),
+		Consul:            config.DefaultConsulConfig(),
+		DestinationConsul: config.DefaultConsulConfig(),
+		Excludes:          DefaultExcludeConfigs(),
+		Prefixes:          DefaultPrefixConfigs(),
+		StatusDir:         config.String(DefaultStatusDir),
+		Syslog:            config.DefaultSyslogConfig(),
+		Wait:              config.DefaultWaitConfig(),
 	}
 }
 
